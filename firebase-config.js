@@ -146,6 +146,14 @@ async function testFirebaseConnection() {
  * │   ├── drawNumber: 1050  // 추첨 회차
  * │   ├── createdAt: Timestamp
  * │   └── date: "2024/01/15"
+ * 
+ * winningNumbers/
+ * ├── {document-id}/
+ * │   ├── drawNumber: 1050  // 추첨 회차
+ * │   ├── numbers: [1, 5, 12, 23, 34, 45]  // 당첨 번호
+ * │   ├── bonusNumber: 7  // 보너스 번호
+ * │   ├── drawDate: "2024-01-15"  // 추첨일
+ * │   └── createdAt: Timestamp
  */
 
 // 인증 관련 유틸리티 함수들
@@ -326,19 +334,241 @@ const FirebaseUtils = {
             throw error;
         }
     },
+
+    /**
+     * 저장된 번호 삭제
+     */
+    async deleteUserNumber(docId) {
+        try {
+            if (!auth.currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+
+            // 문서 권한 확인
+            const doc = await db.collection('userNumbers').doc(docId).get();
+            if (!doc.exists) {
+                throw new Error('존재하지 않는 데이터입니다.');
+            }
+
+            const data = doc.data();
+            if (data.userId !== auth.currentUser.uid) {
+                throw new Error('삭제 권한이 없습니다.');
+            }
+
+            await db.collection('userNumbers').doc(docId).delete();
+            console.log('🗑️ 번호 삭제 완료:', docId);
+            return true;
+
+        } catch (error) {
+            console.error('❌ 번호 삭제 실패:', error);
+            throw error;
+        }
+    },
     
+    /**
+     * 당첨 번호 저장 (관리자 전용)
+     */
+    async saveWinningNumbers(drawNumber, numbers, bonusNumber, drawDate) {
+        try {
+            if (!auth.currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+
+            // 관리자 권한 확인 (간단한 예시, 실제로는 더 정교한 권한 확인 필요)
+            if (auth.currentUser.email !== 'admin@example.com') {
+                throw new Error('관리자만 당첨 번호를 등록할 수 있습니다.');
+            }
+
+            const docData = {
+                drawNumber: drawNumber,
+                numbers: numbers.sort((a, b) => a - b), // 오름차순 정렬
+                bonusNumber: bonusNumber,
+                drawDate: drawDate,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const docRef = await db.collection('winningNumbers').add(docData);
+            console.log('🎯 당첨 번호 저장 완료, 문서 ID:', docRef.id);
+            return docRef.id;
+
+        } catch (error) {
+            console.error('❌ 당첨 번호 저장 실패:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * 최신 당첨 번호 조회
+     */
+    async getLatestWinningNumbers() {
+        try {
+            const snapshot = await db.collection('winningNumbers')
+                .orderBy('drawNumber', 'desc')
+                .limit(1)
+                .get();
+
+            if (snapshot.empty) {
+                return null;
+            }
+
+            const doc = snapshot.docs[0];
+            const data = { id: doc.id, ...doc.data() };
+            console.log('🎯 최신 당첨 번호 조회 완료:', data.drawNumber);
+            return data;
+
+        } catch (error) {
+            console.error('❌ 당첨 번호 조회 실패:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * 특정 회차 당첨 번호 조회
+     */
+    async getWinningNumbersByDraw(drawNumber) {
+        try {
+            const snapshot = await db.collection('winningNumbers')
+                .where('drawNumber', '==', drawNumber)
+                .limit(1)
+                .get();
+
+            if (snapshot.empty) {
+                return null;
+            }
+
+            const doc = snapshot.docs[0];
+            const data = { id: doc.id, ...doc.data() };
+            console.log(`🎯 ${drawNumber}회차 당첨 번호 조회 완료`);
+            return data;
+
+        } catch (error) {
+            console.error('❌ 당첨 번호 조회 실패:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * 당첨 번호 실시간 리스너 설정
+     */
+    setupWinningNumbersListener(callback) {
+        return db.collection('winningNumbers')
+            .orderBy('drawNumber', 'desc')
+            .limit(5)
+            .onSnapshot((snapshot) => {
+                const winningNumbers = [];
+                snapshot.forEach(doc => {
+                    winningNumbers.push({ id: doc.id, ...doc.data() });
+                });
+                callback(winningNumbers);
+            }, (error) => {
+                console.error('❌ 당첨 번호 실시간 조회 실패:', error);
+            });
+    },
+
+    /**
+     * 당첨 확인 및 등급 계산
+     */
+    checkWinning(userNumbers, winningNumbers, bonusNumber) {
+        if (!Array.isArray(userNumbers) || !Array.isArray(winningNumbers)) {
+            return { rank: 0, matchCount: 0, matchNumbers: [], hasBonus: false };
+        }
+
+        const matchNumbers = userNumbers.filter(num => winningNumbers.includes(num));
+        const matchCount = matchNumbers.length;
+        const hasBonus = userNumbers.includes(bonusNumber);
+
+        let rank = 0;
+        let prize = '';
+
+        if (matchCount === 6) {
+            rank = 1;
+            prize = '1등 (6개 일치)';
+        } else if (matchCount === 5 && hasBonus) {
+            rank = 2;
+            prize = '2등 (5개 + 보너스)';
+        } else if (matchCount === 5) {
+            rank = 3;
+            prize = '3등 (5개 일치)';
+        } else if (matchCount === 4) {
+            rank = 4;
+            prize = '4등 (4개 일치)';
+        } else if (matchCount === 3) {
+            rank = 5;
+            prize = '5등 (3개 일치)';
+        }
+
+        return {
+            rank,
+            prize,
+            matchCount,
+            matchNumbers,
+            hasBonus: hasBonus && rank === 2
+        };
+    },
+
+    /**
+     * 사용자 번호의 당첨 내역 조회
+     */
+    async getUserWinningHistory(userId = null) {
+        try {
+            const currentUser = userId || (auth.currentUser ? auth.currentUser.uid : null);
+            if (!currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+
+            // 사용자 번호 조회
+            const userNumbers = await this.getUserNumbers(currentUser, 50);
+            
+            // 각 번호에 대해 당첨 확인
+            const winningHistory = [];
+            
+            for (const userNumber of userNumbers) {
+                const winningData = await this.getWinningNumbersByDraw(userNumber.drawNumber);
+                if (winningData) {
+                    const result = this.checkWinning(
+                        userNumber.numbers,
+                        winningData.numbers,
+                        winningData.bonusNumber
+                    );
+                    
+                    if (result.rank > 0) {
+                        winningHistory.push({
+                            ...userNumber,
+                            winningResult: result,
+                            winningData: winningData
+                        });
+                    }
+                }
+            }
+
+            console.log(`🏆 당첨 내역 조회 완료: ${winningHistory.length}건`);
+            return winningHistory;
+
+        } catch (error) {
+            console.error('❌ 당첨 내역 조회 실패:', error);
+            throw error;
+        }
+    },
+
     /**
      * 통계 정보 조회
      */
     async getStatistics() {
         try {
-            const db = firebase.firestore();
-            const snapshot = await db.collection('lotto-selections').get();
+            const snapshot = await db.collection('userNumbers').get();
             
             const stats = {
                 totalSelections: snapshot.size,
                 numberFrequency: {},
-                dateFrequency: {}
+                dateFrequency: {},
+                winningStats: {
+                    rank1: 0,
+                    rank2: 0,
+                    rank3: 0,
+                    rank4: 0,
+                    rank5: 0,
+                    total: 0
+                }
             };
             
             snapshot.forEach(doc => {

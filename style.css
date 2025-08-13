@@ -209,6 +209,269 @@ body {
     font-size: 0.9rem;
 }
 
+/* 당첨 번호 섹션 */
+.winning-numbers-section {
+    margin: 30px 0;
+}
+
+.winning-numbers-section h2 {
+    color: #2d3748;
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+    text-align: center;
+}
+
+.winning-numbers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.winning-card {
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+    border: 2px solid #f7fafc;
+    transition: all 0.3s ease;
+}
+
+.winning-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(255, 215, 0, 0.4);
+}
+
+.winning-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.winning-header .draw-number {
+    font-weight: bold;
+    color: #744210;
+    font-size: 1.1rem;
+}
+
+.winning-header .draw-date {
+    color: #744210;
+    font-size: 0.9rem;
+}
+
+.winning-numbers {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+}
+
+.main-numbers {
+    display: flex;
+    gap: 8px;
+}
+
+.winning-ball {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: bold;
+    font-size: 1rem;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.bonus-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+}
+
+.plus {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #744210;
+}
+
+.bonus-ball {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    font-weight: bold;
+    font-size: 1rem;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.no-winning-numbers {
+    text-align: center;
+    padding: 40px;
+    color: #718096;
+    font-style: italic;
+}
+
+/* 당첨된 번호 카드 스타일 */
+.number-card.winning-card {
+    border: 3px solid #ffd700;
+    background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.number-card.winning-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+.winning-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: white;
+    z-index: 2;
+}
+
+.winning-badge.rank-1 {
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+    color: #744210;
+    border: 2px solid #ffd700;
+}
+
+.winning-badge.rank-2 {
+    background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+    color: #4a5568;
+}
+
+.winning-badge.rank-3 {
+    background: linear-gradient(135deg, #cd7f32 0%, #daa520 100%);
+    color: white;
+}
+
+.winning-badge.rank-4 {
+    background: linear-gradient(135deg, #4299e1 0%, #63b3ed 100%);
+    color: white;
+}
+
+.winning-badge.rank-5 {
+    background: linear-gradient(135deg, #48bb78 0%, #68d391 100%);
+    color: white;
+}
+
+/* 당첨 번호 하이라이트 */
+.number-ball.winning-number {
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%) !important;
+    color: #744210 !important;
+    border: 2px solid #f7fafc;
+    font-weight: bold;
+    animation: winningPulse 2s infinite;
+}
+
+.number-ball.bonus-number {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+    color: white !important;
+    border: 2px solid #f7fafc;
+    animation: bonusPulse 2s infinite;
+}
+
+@keyframes winningPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 3px 10px rgba(255, 215, 0, 0.3); }
+    50% { transform: scale(1.05); box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5); }
+}
+
+@keyframes bonusPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 3px 10px rgba(240, 147, 251, 0.3); }
+    50% { transform: scale(1.05); box-shadow: 0 6px 20px rgba(240, 147, 251, 0.5); }
+}
+
+/* 당첨 통계 섹션 */
+.winning-stats-section {
+    margin: 30px 0;
+    background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.winning-stats-section h3 {
+    color: #2d3748;
+    margin-bottom: 15px;
+    font-size: 1.3rem;
+    text-align: center;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.stat-item {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-item .stat-number {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #4299e1;
+    margin-bottom: 5px;
+}
+
+.stat-item .stat-label {
+    font-size: 0.9rem;
+    color: #718096;
+}
+
+.rank-stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.rank-stat {
+    background: white;
+    padding: 12px 8px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+.rank-stat.rank-1 { border-left: 4px solid #ffd700; }
+.rank-stat.rank-2 { border-left: 4px solid #c0c0c0; }
+.rank-stat.rank-3 { border-left: 4px solid #cd7f32; }
+.rank-stat.rank-4 { border-left: 4px solid #4299e1; }
+.rank-stat.rank-5 { border-left: 4px solid #48bb78; }
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .container {
@@ -540,6 +803,189 @@ body {
     color: #dd6b20;
 }
 
+/* My Numbers Section */
+.my-numbers-section {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 2px solid #e2e8f0;
+}
+
+.my-numbers-section h2 {
+    text-align: center;
+    color: #4a5568;
+    margin-bottom: 25px;
+    font-size: 1.5rem;
+}
+
+.my-numbers-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.number-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+}
+
+.number-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+    color: #718096;
+}
+
+.draw-number {
+    font-weight: bold;
+    color: #4299e1;
+    background: #ebf8ff;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.save-date {
+    color: #a0aec0;
+}
+
+.delete-btn {
+    background: #fed7d7;
+    color: #e53e3e;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.delete-btn:hover {
+    background: #feb2b2;
+    transform: scale(1.1);
+}
+
+.card-numbers {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.number-ball {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: white;
+    background: linear-gradient(135deg, #4299e1, #3182ce);
+    box-shadow: 0 2px 6px rgba(66, 153, 225, 0.3);
+}
+
+.no-numbers {
+    text-align: center;
+    padding: 40px 20px;
+    color: #a0aec0;
+    grid-column: 1 / -1;
+}
+
+.no-numbers p {
+    margin-bottom: 8px;
+}
+
+.no-numbers p:first-child {
+    font-weight: bold;
+    color: #718096;
+    font-size: 1.1rem;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner-overlay {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    min-width: 150px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #4299e1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px auto;
+}
+
+.spinner-overlay p {
+    color: #4a5568;
+    font-weight: bold;
+    margin: 0;
+}
+
+/* Responsive My Numbers */
+@media (max-width: 768px) {
+    .my-numbers-list {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .number-card {
+        padding: 15px;
+    }
+    
+    .card-numbers {
+        gap: 6px;
+    }
+    
+    .number-ball {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+    }
+    
+    .my-numbers-section {
+        margin-top: 30px;
+        padding-top: 20px;
+    }
+}
+
 /* Responsive Modal */
 @media (max-width: 480px) {
     .modal-content {
@@ -554,5 +1000,22 @@ body {
     
     .form-group input {
         padding: 10px;
+    }
+    
+    .number-ball {
+        width: 30px;
+        height: 30px;
+        font-size: 0.8rem;
+    }
+    
+    .spinner-overlay {
+        padding: 20px;
+        min-width: 120px;
+    }
+    
+    .spinner {
+        width: 30px;
+        height: 30px;
+        border-width: 3px;
     }
 }

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로또 관리자 페이지</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .admin-header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2d3748;
+        }
+        
+        .admin-form {
+            background: #f7fafc;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #4a5568;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .number-input-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .number-input {
+            text-align: center;
+            padding: 12px 8px;
+        }
+        
+        .bonus-input {
+            max-width: 100px;
+            margin-top: 10px;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .recent-numbers {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        
+        .recent-numbers h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+        
+        .warning-box {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            border: 2px solid #fc8181;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #742a2a;
+        }
+        
+        .warning-box strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .auth-status {
+            text-align: center;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .auth-status.admin {
+            background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+            color: #22543d;
+        }
+        
+        .auth-status.not-admin {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            color: #742a2a;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1>🏆 로또 관리자 페이지</h1>
+            <p>당첨 번호 등록 및 관리</p>
+        </header>
+
+        <!-- 인증 상태 표시 -->
+        <div id="authStatus" class="auth-status not-admin">
+            <div id="authMessage">로그인이 필요합니다.</div>
+            <button id="loginBtn" class="btn btn-primary" style="margin-top: 10px;">로그인</button>
+        </div>
+
+        <!-- 당첨 번호 등록 폼 -->
+        <div id="adminForm" class="admin-form" style="display: none;">
+            <div class="warning-box">
+                <strong>⚠️ 주의사항</strong>
+                관리자만 당첨 번호를 등록할 수 있습니다. 잘못된 정보 입력 시 모든 사용자의 당첨 확인에 영향을 미칩니다.
+            </div>
+
+            <form id="winningNumberForm">
+                <div class="form-group">
+                    <label for="drawNumber">추첨 회차</label>
+                    <input type="number" id="drawNumber" min="1" max="9999" required>
+                    <small>예: 1050</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="drawDate">추첨일</label>
+                    <input type="date" id="drawDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>당첨 번호 (6개)</label>
+                    <div class="number-input-grid">
+                        <input type="number" class="number-input" min="1" max="45" placeholder="1" required>
+                        <input type="number" class="number-input" min="1" max="45" placeholder="2" required>
+                        <input type="number" class="number-input" min="1" max="45" placeholder="3" required>
+                        <input type="number" class="number-input" min="1" max="45" placeholder="4" required>
+                        <input type="number" class="number-input" min="1" max="45" placeholder="5" required>
+                        <input type="number" class="number-input" min="1" max="45" placeholder="6" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="bonusNumber">보너스 번호</label>
+                    <input type="number" id="bonusNumber" class="bonus-input" min="1" max="45" required>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    당첨 번호 등록
+                </button>
+            </form>
+        </div>
+
+        <!-- 최근 등록된 당첨 번호 -->
+        <div class="recent-numbers">
+            <h3>최근 등록된 당첨 번호</h3>
+            <div id="recentNumbersList">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 로그인 모달 -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>관리자 로그인</h2>
+            
+            <form id="authForm">
+                <div class="form-group">
+                    <label for="email">이메일</label>
+                    <input type="email" id="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">비밀번호</label>
+                    <input type="password" id="password" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary auth-btn">로그인</button>
+            </form>
+
+            <div class="divider">
+                <span>또는</span>
+            </div>
+
+            <button id="googleLoginBtn" class="btn btn-google">Google로 로그인</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <!-- 커스텀 스크립트 -->
+    <script src="firebase-config.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

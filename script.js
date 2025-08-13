@@ -7,6 +7,11 @@ class LottoApp {
         this.maxNumber = 45;
         this.currentUser = null;
         this.isLoginMode = true;
+        this.userNumbers = [];
+        this.isLoading = false;
+        this.winningNumbers = [];
+        this.winningNumbersListener = null;
+        this.latestWinning = null;
         
         this.init();
     }
@@ -174,9 +179,14 @@ class LottoApp {
         }
 
         try {
+            this.showLoadingSpinner(true);
+            
             if (typeof FirebaseUtils !== 'undefined') {
                 await FirebaseUtils.saveNumbers(this.selectedNumbers);
                 this.showMessage('번호가 성공적으로 저장되었습니다!', 'success');
+                
+                // 저장 후 내 번호 목록 새로고침
+                await this.loadUserNumbers();
                 
                 // 저장 후 새로운 선택을 위해 초기화
                 setTimeout(() => {
@@ -195,6 +205,8 @@ class LottoApp {
             } else {
                 this.showMessage('저장 중 오류가 발생했습니다.', 'error');
             }
+        } finally {
+            this.showLoadingSpinner(false);
         }
     }
 
@@ -318,8 +330,13 @@ class LottoApp {
                 
                 if (user) {
                     console.log('로그인됨:', user.email);
+                    this.loadUserNumbers();
+                    this.setupWinningNumbersListener();
                 } else {
                     console.log('로그아웃됨');
+                    this.userNumbers = [];
+                    this.updateMyNumbersSection();
+                    this.cleanupWinningNumbersListener();
                 }
             });
         }
@@ -484,6 +501,397 @@ class LottoApp {
         document.getElementById('email').value = '';
         document.getElementById('password').value = '';
         document.getElementById('displayName').value = '';
+    }
+
+    // 사용자 번호 조회
+    async loadUserNumbers() {
+        if (!this.currentUser) {
+            this.userNumbers = [];
+            this.updateMyNumbersSection();
+            return;
+        }
+
+        try {
+            this.showLoadingSpinner(true);
+            
+            if (typeof FirebaseUtils !== 'undefined') {
+                this.userNumbers = await FirebaseUtils.getUserNumbers();
+                this.updateMyNumbersSection();
+            }
+        } catch (error) {
+            console.error('번호 조회 오류:', error);
+            this.showMessage('번호 조회 중 오류가 발생했습니다.', 'error');
+        } finally {
+            this.showLoadingSpinner(false);
+        }
+    }
+
+    // 내 번호 섹션 업데이트
+    updateMyNumbersSection() {
+        const myNumbersSection = document.getElementById('myNumbersSection');
+        const myNumbersList = document.getElementById('myNumbersList');
+        
+        if (!this.currentUser) {
+            myNumbersSection.style.display = 'none';
+            return;
+        }
+
+        myNumbersSection.style.display = 'block';
+        myNumbersList.innerHTML = '';
+
+        if (this.userNumbers.length === 0) {
+            myNumbersList.innerHTML = `
+                <div class="no-numbers">
+                    <p>저장된 번호가 없습니다.</p>
+                    <p>번호를 선택하고 저장해보세요!</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.userNumbers.forEach(numberData => {
+            const card = this.createNumberCard(numberData);
+            myNumbersList.appendChild(card);
+        });
+
+        // 당첨 통계 업데이트
+        this.updateWinningStats();
+    }
+
+    // 번호 카드 생성 (당첨 정보 포함)
+    createNumberCard(numberData) {
+        const card = document.createElement('div');
+        card.className = 'number-card';
+        
+        // 당첨 확인
+        let winningInfo = '';
+        let winningClass = '';
+        
+        if (this.latestWinning && numberData.drawNumber <= this.latestWinning.drawNumber) {
+            const winningResult = this.checkWinningForNumber(numberData);
+            if (winningResult && winningResult.rank > 0) {
+                winningInfo = `<div class="winning-badge rank-${winningResult.rank}">${winningResult.prize}</div>`;
+                winningClass = ` winning-card rank-${winningResult.rank}`;
+            }
+        }
+
+        card.className += winningClass;
+        card.innerHTML = `
+            <div class="card-header">
+                <span class="draw-number">제${numberData.drawNumber}회</span>
+                <span class="save-date">${numberData.date}</span>
+                <button class="delete-btn" data-id="${numberData.id}" title="삭제">×</button>
+            </div>
+            <div class="card-numbers">
+                ${this.renderNumberBalls(numberData.numbers, numberData.drawNumber)}
+            </div>
+            ${winningInfo}
+        `;
+
+        // 삭제 버튼 이벤트
+        const deleteBtn = card.querySelector('.delete-btn');
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteUserNumber(numberData.id);
+        });
+
+        return card;
+    }
+
+    // 번호 볼 렌더링 (당첨 번호 하이라이트)
+    renderNumberBalls(numbers, drawNumber) {
+        if (!this.latestWinning || drawNumber > this.latestWinning.drawNumber) {
+            return numbers.map(num => `<span class="number-ball">${num}</span>`).join('');
+        }
+
+        const winningData = this.getWinningDataByDraw(drawNumber);
+        if (!winningData) {
+            return numbers.map(num => `<span class="number-ball">${num}</span>`).join('');
+        }
+
+        return numbers.map(num => {
+            const isWinning = winningData.numbers.includes(num);
+            const isBonus = num === winningData.bonusNumber;
+            let className = 'number-ball';
+            
+            if (isWinning) {
+                className += ' winning-number';
+            } else if (isBonus) {
+                className += ' bonus-number';
+            }
+
+            return `<span class="${className}">${num}</span>`;
+        }).join('');
+    }
+
+    // 특정 번호의 당첨 확인
+    checkWinningForNumber(numberData) {
+        if (!this.latestWinning || numberData.drawNumber > this.latestWinning.drawNumber) {
+            return null;
+        }
+
+        const winningData = this.getWinningDataByDraw(numberData.drawNumber);
+        if (!winningData) {
+            return null;
+        }
+
+        if (typeof FirebaseUtils !== 'undefined') {
+            return FirebaseUtils.checkWinning(
+                numberData.numbers,
+                winningData.numbers,
+                winningData.bonusNumber
+            );
+        }
+        return null;
+    }
+
+    // 특정 회차의 당첨 데이터 찾기
+    getWinningDataByDraw(drawNumber) {
+        return this.winningNumbers.find(w => w.drawNumber === drawNumber);
+    }
+
+    // 번호 삭제
+    async deleteUserNumber(docId) {
+        if (!confirm('이 번호를 삭제하시겠습니까?')) {
+            return;
+        }
+
+        try {
+            this.showLoadingSpinner(true);
+            
+            if (typeof FirebaseUtils !== 'undefined') {
+                await FirebaseUtils.deleteUserNumber(docId);
+                this.showMessage('번호가 삭제되었습니다.', 'success');
+                await this.loadUserNumbers();
+            }
+        } catch (error) {
+            console.error('삭제 오류:', error);
+            if (error.message === '삭제 권한이 없습니다.') {
+                this.showMessage('삭제 권한이 없습니다.', 'error');
+            } else {
+                this.showMessage('삭제 중 오류가 발생했습니다.', 'error');
+            }
+        } finally {
+            this.showLoadingSpinner(false);
+        }
+    }
+
+    // 로딩 스피너 표시/숨김
+    showLoadingSpinner(show) {
+        this.isLoading = show;
+        let spinner = document.getElementById('loadingSpinner');
+        
+        if (show && !spinner) {
+            spinner = document.createElement('div');
+            spinner.id = 'loadingSpinner';
+            spinner.className = 'loading-spinner';
+            spinner.innerHTML = `
+                <div class="spinner-overlay">
+                    <div class="spinner"></div>
+                    <p>처리 중...</p>
+                </div>
+            `;
+            document.body.appendChild(spinner);
+        } else if (!show && spinner) {
+            spinner.remove();
+        }
+    }
+
+    // 당첨 번호 실시간 리스너 설정
+    setupWinningNumbersListener() {
+        if (typeof FirebaseUtils !== 'undefined' && FirebaseUtils.setupWinningNumbersListener) {
+            this.winningNumbersListener = FirebaseUtils.setupWinningNumbersListener((winningNumbers) => {
+                this.winningNumbers = winningNumbers;
+                if (winningNumbers.length > 0) {
+                    this.latestWinning = winningNumbers[0];
+                }
+                this.updateWinningNumbersSection();
+                this.updateMyNumbersSection(); // 당첨 정보 업데이트를 위해 재렌더링
+                this.updateWinningStats(); // 당첨 통계 업데이트
+            });
+        }
+    }
+
+    // 당첨 번호 리스너 정리
+    cleanupWinningNumbersListener() {
+        if (this.winningNumbersListener) {
+            this.winningNumbersListener();
+            this.winningNumbersListener = null;
+        }
+    }
+
+    // 당첨 번호 섹션 업데이트
+    updateWinningNumbersSection() {
+        let winningSection = document.getElementById('winningNumbersSection');
+        
+        if (!winningSection) {
+            // 당첨 번호 섹션이 없으면 생성
+            this.createWinningNumbersSection();
+            winningSection = document.getElementById('winningNumbersSection');
+        }
+
+        const winningList = document.getElementById('winningNumbersList');
+        winningList.innerHTML = '';
+
+        if (this.winningNumbers.length === 0) {
+            winningList.innerHTML = `
+                <div class="no-winning-numbers">
+                    <p>아직 등록된 당첨 번호가 없습니다.</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.winningNumbers.forEach(winningData => {
+            const card = this.createWinningNumberCard(winningData);
+            winningList.appendChild(card);
+        });
+    }
+
+    // 당첨 번호 섹션 생성
+    createWinningNumbersSection() {
+        const mainContent = document.querySelector('.main-content');
+        const myNumbersSection = document.getElementById('myNumbersSection');
+        
+        const winningSection = document.createElement('div');
+        winningSection.className = 'winning-numbers-section';
+        winningSection.id = 'winningNumbersSection';
+        winningSection.innerHTML = `
+            <h2>🎯 당첨 번호</h2>
+            <div class="winning-numbers-list" id="winningNumbersList">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
+        `;
+
+        mainContent.insertBefore(winningSection, myNumbersSection);
+        
+        // 당첨 통계 섹션도 생성
+        this.createWinningStatsSection();
+    }
+
+    // 당첨 통계 섹션 생성
+    createWinningStatsSection() {
+        const mainContent = document.querySelector('.main-content');
+        const myNumbersSection = document.getElementById('myNumbersSection');
+        
+        const statsSection = document.createElement('div');
+        statsSection.className = 'winning-stats-section';
+        statsSection.id = 'winningStatsSection';
+        statsSection.innerHTML = `
+            <h3>🏆 나의 당첨 통계</h3>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-item">
+                    <span class="stat-number" id="totalNumbers">0</span>
+                    <span class="stat-label">총 번호</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="totalWinnings">0</span>
+                    <span class="stat-label">당첨 횟수</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="winningRate">0%</span>
+                    <span class="stat-label">당첨률</span>
+                </div>
+            </div>
+            <div class="rank-stats" id="rankStats">
+                <div class="rank-stat rank-1">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">1등</div>
+                </div>
+                <div class="rank-stat rank-2">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">2등</div>
+                </div>
+                <div class="rank-stat rank-3">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">3등</div>
+                </div>
+                <div class="rank-stat rank-4">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">4등</div>
+                </div>
+                <div class="rank-stat rank-5">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">5등</div>
+                </div>
+            </div>
+        `;
+
+        mainContent.insertBefore(statsSection, myNumbersSection);
+    }
+
+    // 당첨 통계 업데이트
+    async updateWinningStats() {
+        if (!this.currentUser || this.userNumbers.length === 0) {
+            return;
+        }
+
+        try {
+            const stats = {
+                total: this.userNumbers.length,
+                winnings: { rank1: 0, rank2: 0, rank3: 0, rank4: 0, rank5: 0, total: 0 }
+            };
+
+            // 각 번호에 대해 당첨 확인
+            for (const numberData of this.userNumbers) {
+                const winningResult = this.checkWinningForNumber(numberData);
+                if (winningResult && winningResult.rank > 0) {
+                    stats.winnings[`rank${winningResult.rank}`]++;
+                    stats.winnings.total++;
+                }
+            }
+
+            // UI 업데이트
+            const totalNumbersEl = document.getElementById('totalNumbers');
+            const totalWinningsEl = document.getElementById('totalWinnings');
+            const winningRateEl = document.getElementById('winningRate');
+
+            if (totalNumbersEl) totalNumbersEl.textContent = stats.total;
+            if (totalWinningsEl) totalWinningsEl.textContent = stats.winnings.total;
+            if (winningRateEl) {
+                const rate = stats.total > 0 ? ((stats.winnings.total / stats.total) * 100).toFixed(1) : 0;
+                winningRateEl.textContent = `${rate}%`;
+            }
+
+            // 등급별 통계 업데이트
+            const rankStats = document.getElementById('rankStats');
+            if (rankStats) {
+                const rankElements = rankStats.querySelectorAll('.rank-stat');
+                rankElements.forEach((el, index) => {
+                    const rank = index + 1;
+                    const countEl = el.querySelector('.stat-number');
+                    if (countEl) {
+                        countEl.textContent = stats.winnings[`rank${rank}`] || 0;
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error('당첨 통계 업데이트 실패:', error);
+        }
+    }
+
+    // 당첨 번호 카드 생성
+    createWinningNumberCard(winningData) {
+        const card = document.createElement('div');
+        card.className = 'winning-card';
+        card.innerHTML = `
+            <div class="winning-header">
+                <span class="draw-number">제${winningData.drawNumber}회</span>
+                <span class="draw-date">${winningData.drawDate}</span>
+            </div>
+            <div class="winning-numbers">
+                <div class="main-numbers">
+                    ${winningData.numbers.map(num => `<span class="winning-ball">${num}</span>`).join('')}
+                </div>
+                <div class="bonus-section">
+                    <span class="plus">+</span>
+                    <span class="bonus-ball">${winningData.bonusNumber}</span>
+                </div>
+            </div>
+        `;
+
+        return card;
     }
 }
 

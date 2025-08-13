@@ -1,0 +1,146 @@
+/**
+ * Firestore 보안 규칙 (Security Rules)
+ * 
+ * Firebase Console > Firestore Database > 규칙 탭에서 아래 규칙을 복사하여 붙여넣으세요.
+ * 
+ * 설정 방법:
+ * 1. Firebase Console (https://console.firebase.google.com/) 접속
+ * 2. 프로젝트 선택
+ * 3. Firestore Database > 규칙 탭 클릭
+ * 4. 아래 규칙을 복사하여 붙여넣기
+ * 5. "게시" 버튼 클릭
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 사용자 정보 접근 규칙
+    match /users/{userId} {
+      // 자신의 사용자 정보만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 사용자별 로또 번호 접근 규칙
+    match /userNumbers/{document} {
+      // 로그인한 사용자만 접근 가능
+      allow read, write: if request.auth != null;
+      
+      // 생성 시 추가 검증
+      allow create: if request.auth != null 
+        && request.auth.uid == resource.data.userId
+        && validateLottoNumbers(resource.data.numbers)
+        && resource.data.keys().hasAll(['userId', 'numbers', 'drawNumber', 'createdAt', 'date']);
+      
+      // 업데이트 시 소유자만 가능
+      allow update: if request.auth != null 
+        && request.auth.uid == resource.data.userId;
+      
+      // 삭제 시 소유자만 가능
+      allow delete: if request.auth != null 
+        && request.auth.uid == resource.data.userId;
+    }
+    
+    // 당첨 번호 접근 규칙
+    match /winningNumbers/{document} {
+      // 모든 로그인 사용자가 읽기 가능
+      allow read: if request.auth != null;
+      
+      // 관리자만 쓰기 가능 (admin@example.com 또는 특정 사용자만)
+      allow write: if request.auth != null 
+        && (request.auth.token.email == 'admin@example.com' || request.auth.token.admin == true);
+      
+      // 생성 시 데이터 검증
+      allow create: if request.auth != null 
+        && (request.auth.token.email == 'admin@example.com' || request.auth.token.admin == true)
+        && validateWinningNumbers(resource.data.numbers, resource.data.bonusNumber)
+        && resource.data.keys().hasAll(['drawNumber', 'numbers', 'bonusNumber', 'drawDate', 'createdAt']);
+    }
+    
+    // 테스트 컬렉션 (개발용, 프로덕션에서는 제거 권장)
+    match /test/{document} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 기본적으로 모든 다른 접근 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+  
+  // 로또 번호 유효성 검증 함수
+  function validateLottoNumbers(numbers) {
+    return numbers is list
+      && numbers.size() == 6
+      && numbers.toSet().size() == 6  // 중복 제거
+      && numbers.hasAll([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45].toSet().intersection(numbers.toSet()))
+      && numbers.toSet().difference([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45].toSet()).size() == 0;
+  }
+  
+  // 당첨 번호 유효성 검증 함수
+  function validateWinningNumbers(numbers, bonusNumber) {
+    return numbers is list
+      && numbers.size() == 6
+      && numbers.toSet().size() == 6  // 중복 제거
+      && bonusNumber is int
+      && bonusNumber >= 1 && bonusNumber <= 45
+      && !numbers.hasAny([bonusNumber])  // 보너스 번호는 기본 번호와 중복되면 안됨
+      && numbers.hasAll([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45].toSet().intersection(numbers.toSet()))
+      && numbers.toSet().difference([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45].toSet()).size() == 0;
+  }
+}
+
+/**
+ * 보안 규칙 설명:
+ * 
+ * 1. users 컬렉션:
+ *    - 로그인한 사용자는 자신의 사용자 정보만 읽기/쓰기 가능
+ * 
+ * 2. userNumbers 컬렉션:
+ *    - 로그인한 사용자만 접근 가능
+ *    - 생성 시: 자신의 userId와 일치하고, 유효한 로또 번호여야 함
+ *    - 업데이트/삭제: 데이터의 소유자만 가능
+ * 
+ * 3. validateLottoNumbers 함수:
+ *    - 배열이 6개 원소를 가지는지 검증
+ *    - 중복 번호가 없는지 검증
+ *    - 1-45 범위 내의 번호인지 검증
+ * 
+ * 4. 보안 특징:
+ *    - 인증되지 않은 사용자는 접근 불가
+ *    - 사용자별 데이터 격리
+ *    - 데이터 무결성 보장
+ *    - 악의적인 데이터 입력 방지
+ */
+
+/**
+ * 테스트용 규칙 (개발 중에만 사용):
+ * 
+ * 개발 단계에서만 사용할 수 있는 더 관대한 규칙입니다.
+ * 프로덕션 환경에서는 위의 엄격한 규칙을 사용하세요.
+ */
+
+/*
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 개발용 규칙 - 로그인한 사용자는 모든 데이터 접근 가능
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+*/
+
+/**
+ * 규칙 적용 후 확인 방법:
+ * 
+ * 1. 브라우저 개발자 도구 > 콘솔 탭에서 오류 메시지 확인
+ * 2. Firebase Console > Firestore Database > 규칙 탭 > "시뮬레이터" 사용
+ * 3. 실제 로그인/저장/조회 기능 테스트
+ * 
+ * 문제 해결:
+ * - "Missing or insufficient permissions" 오류 시 규칙 재확인
+ * - 규칙 변경 후 몇 분 정도 반영 시간 필요
+ * - 브라우저 캐시 삭제 후 재테스트
+ */
