@@ -594,6 +594,165 @@ const FirebaseUtils = {
             console.error('❌ 통계 조회 실패:', error);
             throw error;
         }
+    },
+
+    /**
+     * 사용자 당첨 결과 조회 (userResults 컬렉션)
+     */
+    async getUserResults(userId = null, limit = 20) {
+        try {
+            const currentUser = userId || (auth.currentUser ? auth.currentUser.uid : null);
+            
+            if (!currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+            
+            const snapshot = await db.collection('userResults')
+                .where('userId', '==', currentUser)
+                .orderBy('drawNumber', 'desc')
+                .limit(limit)
+                .get();
+            
+            const results = [];
+            snapshot.forEach(doc => {
+                results.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
+            
+            console.log(`🏆 사용자 당첨 결과 조회 완료: ${results.length}건`);
+            return results;
+            
+        } catch (error) {
+            console.error('❌ 사용자 당첨 결과 조회 실패:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * 사용자 당첨 결과 실시간 리스너 설정
+     */
+    setupUserResultsListener(callback, userId = null) {
+        const currentUser = userId || (auth.currentUser ? auth.currentUser.uid : null);
+        
+        if (!currentUser) {
+            console.error('❌ 로그인이 필요합니다.');
+            return null;
+        }
+
+        return db.collection('userResults')
+            .where('userId', '==', currentUser)
+            .orderBy('drawNumber', 'desc')
+            .limit(20)
+            .onSnapshot((snapshot) => {
+                const results = [];
+                snapshot.forEach(doc => {
+                    results.push({ id: doc.id, ...doc.data() });
+                });
+                callback(results);
+            }, (error) => {
+                console.error('❌ 사용자 당첨 결과 실시간 조회 실패:', error);
+            });
+    },
+
+    /**
+     * 사용자 당첨 통계 계산
+     */
+    async getUserWinningStats(userId = null) {
+        try {
+            const currentUser = userId || (auth.currentUser ? auth.currentUser.uid : null);
+            
+            if (!currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+            
+            const snapshot = await db.collection('userResults')
+                .where('userId', '==', currentUser)
+                .get();
+            
+            const stats = {
+                totalEntries: snapshot.size,
+                totalWinnings: 0,
+                winningsByRank: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+                winningRate: 0,
+                recentWinnings: []
+            };
+            
+            snapshot.docs.forEach(doc => {
+                const result = doc.data();
+                if (result.rank > 0) {
+                    stats.totalWinnings++;
+                    stats.winningsByRank[result.rank]++;
+                    
+                    if (stats.recentWinnings.length < 10) {
+                        stats.recentWinnings.push({
+                            drawNumber: result.drawNumber,
+                            rank: result.rank,
+                            prize: result.prize,
+                            userNumbers: result.userNumbers,
+                            winningNumbers: result.winningNumbers,
+                            matchCount: result.matchCount
+                        });
+                    }
+                }
+            });
+            
+            stats.winningRate = stats.totalEntries > 0 ? 
+                (stats.totalWinnings / stats.totalEntries * 100).toFixed(2) : 0;
+            
+            // 최신 순으로 정렬
+            stats.recentWinnings.sort((a, b) => b.drawNumber - a.drawNumber);
+            
+            console.log('📊 사용자 당첨 통계 계산 완료');
+            return stats;
+            
+        } catch (error) {
+            console.error('❌ 사용자 당첨 통계 계산 실패:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Cloud Functions 호출 - 수동 당첨 확인 (관리자용)
+     */
+    async manualCheckWinning(drawNumber) {
+        try {
+            if (!auth.currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+
+            const manualCheck = firebase.functions().httpsCallable('manualCheckWinning');
+            const result = await manualCheck({ drawNumber });
+            
+            console.log('🎯 수동 당첨 확인 완료:', result.data);
+            return result.data;
+            
+        } catch (error) {
+            console.error('❌ 수동 당첨 확인 실패:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Cloud Functions 호출 - 사용자 당첨 통계 조회
+     */
+    async getCloudUserWinningStats() {
+        try {
+            if (!auth.currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+
+            const getUserStats = firebase.functions().httpsCallable('getUserWinningStats');
+            const result = await getUserStats();
+            
+            console.log('☁️ Cloud Functions 당첨 통계 조회 완료');
+            return result.data;
+            
+        } catch (error) {
+            console.error('❌ Cloud Functions 당첨 통계 조회 실패:', error);
+            throw error;
+        }
     }
 };
 

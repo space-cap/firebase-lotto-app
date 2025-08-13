@@ -11,6 +11,7 @@ class LottoApp {
         this.isLoading = false;
         this.winningNumbers = [];
         this.winningNumbersListener = null;
+        this.userResultsListener = null;
         this.latestWinning = null;
         
         this.init();
@@ -332,11 +333,13 @@ class LottoApp {
                     console.log('로그인됨:', user.email);
                     this.loadUserNumbers();
                     this.setupWinningNumbersListener();
+                    this.setupUserResultsListener();
                 } else {
                     console.log('로그아웃됨');
                     this.userNumbers = [];
                     this.updateMyNumbersSection();
                     this.cleanupWinningNumbersListener();
+                    this.cleanupUserResultsListener();
                 }
             });
         }
@@ -720,6 +723,25 @@ class LottoApp {
         }
     }
 
+    // 사용자 당첨 결과 실시간 리스너 설정
+    setupUserResultsListener() {
+        if (typeof FirebaseUtils !== 'undefined' && FirebaseUtils.setupUserResultsListener) {
+            this.userResultsListener = FirebaseUtils.setupUserResultsListener((userResults) => {
+                console.log('🏆 사용자 당첨 결과 업데이트:', userResults.length, '건');
+                // 필요시 UI 업데이트
+                this.updateWinningStats(); // 통계 새로고침
+            });
+        }
+    }
+
+    // 사용자 당첨 결과 리스너 정리
+    cleanupUserResultsListener() {
+        if (this.userResultsListener) {
+            this.userResultsListener();
+            this.userResultsListener = null;
+        }
+    }
+
     // 당첨 번호 섹션 업데이트
     updateWinningNumbersSection() {
         let winningSection = document.getElementById('winningNumbersSection');
@@ -820,54 +842,95 @@ class LottoApp {
         mainContent.insertBefore(statsSection, myNumbersSection);
     }
 
-    // 당첨 통계 업데이트
+    // 당첨 통계 업데이트 (userResults 컬렉션 기반)
     async updateWinningStats() {
-        if (!this.currentUser || this.userNumbers.length === 0) {
+        if (!this.currentUser) {
             return;
         }
 
         try {
-            const stats = {
-                total: this.userNumbers.length,
-                winnings: { rank1: 0, rank2: 0, rank3: 0, rank4: 0, rank5: 0, total: 0 }
-            };
-
-            // 각 번호에 대해 당첨 확인
-            for (const numberData of this.userNumbers) {
-                const winningResult = this.checkWinningForNumber(numberData);
-                if (winningResult && winningResult.rank > 0) {
-                    stats.winnings[`rank${winningResult.rank}`]++;
-                    stats.winnings.total++;
-                }
+            let stats;
+            
+            // userResults 컬렉션에서 통계 조회 (서버 사이드 처리된 결과)
+            if (typeof FirebaseUtils !== 'undefined' && FirebaseUtils.getUserWinningStats) {
+                stats = await FirebaseUtils.getUserWinningStats();
+            } else {
+                // Fallback: 기존 로직으로 클라이언트에서 계산
+                stats = await this.calculateWinningStatsLocal();
             }
 
             // UI 업데이트
-            const totalNumbersEl = document.getElementById('totalNumbers');
-            const totalWinningsEl = document.getElementById('totalWinnings');
-            const winningRateEl = document.getElementById('winningRate');
-
-            if (totalNumbersEl) totalNumbersEl.textContent = stats.total;
-            if (totalWinningsEl) totalWinningsEl.textContent = stats.winnings.total;
-            if (winningRateEl) {
-                const rate = stats.total > 0 ? ((stats.winnings.total / stats.total) * 100).toFixed(1) : 0;
-                winningRateEl.textContent = `${rate}%`;
-            }
-
-            // 등급별 통계 업데이트
-            const rankStats = document.getElementById('rankStats');
-            if (rankStats) {
-                const rankElements = rankStats.querySelectorAll('.rank-stat');
-                rankElements.forEach((el, index) => {
-                    const rank = index + 1;
-                    const countEl = el.querySelector('.stat-number');
-                    if (countEl) {
-                        countEl.textContent = stats.winnings[`rank${rank}`] || 0;
-                    }
-                });
-            }
+            this.updateStatsUI(stats);
 
         } catch (error) {
             console.error('당첨 통계 업데이트 실패:', error);
+            // Fallback: 기존 로직 시도
+            try {
+                const localStats = await this.calculateWinningStatsLocal();
+                this.updateStatsUI(localStats);
+            } catch (fallbackError) {
+                console.error('Fallback 통계 계산 실패:', fallbackError);
+            }
+        }
+    }
+
+    // 로컬에서 당첨 통계 계산 (Fallback용)
+    async calculateWinningStatsLocal() {
+        if (!this.userNumbers.length) {
+            return {
+                totalEntries: 0,
+                totalWinnings: 0,
+                winningsByRank: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+                winningRate: 0
+            };
+        }
+
+        const stats = {
+            totalEntries: this.userNumbers.length,
+            totalWinnings: 0,
+            winningsByRank: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+            winningRate: 0
+        };
+
+        // 각 번호에 대해 당첨 확인
+        for (const numberData of this.userNumbers) {
+            const winningResult = this.checkWinningForNumber(numberData);
+            if (winningResult && winningResult.rank > 0) {
+                stats.winningsByRank[winningResult.rank]++;
+                stats.totalWinnings++;
+            }
+        }
+
+        stats.winningRate = stats.totalEntries > 0 ? 
+            ((stats.totalWinnings / stats.totalEntries) * 100).toFixed(1) : 0;
+
+        return stats;
+    }
+
+    // 통계 UI 업데이트
+    updateStatsUI(stats) {
+        const totalNumbersEl = document.getElementById('totalNumbers');
+        const totalWinningsEl = document.getElementById('totalWinnings');
+        const winningRateEl = document.getElementById('winningRate');
+
+        if (totalNumbersEl) totalNumbersEl.textContent = stats.totalEntries || 0;
+        if (totalWinningsEl) totalWinningsEl.textContent = stats.totalWinnings || 0;
+        if (winningRateEl) {
+            const rate = stats.winningRate || 0;
+            winningRateEl.textContent = `${rate}%`;
+        }
+
+        // 등급별 통계 업데이트
+        const rankStats = document.getElementById('rankStats');
+        if (rankStats) {
+            const rankElements = rankStats.querySelectorAll('.rank-stat');
+            rankElements.forEach((el, index) => {
+                const rank = index + 1;
+                const countEl = el.querySelector('.stat-number');
+                if (countEl) {
+                    countEl.textContent = stats.winningsByRank[rank] || 0;
+                }
+            });
         }
     }
 
