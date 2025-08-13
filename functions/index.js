@@ -8,6 +8,11 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const { defineString } = require('firebase-functions/params');
+
+// 환경변수 정의
+const emailUser = defineString('EMAIL_USER');
+const emailPass = defineString('EMAIL_PASS');
 
 // Firebase Admin SDK 초기화
 admin.initializeApp();
@@ -20,8 +25,8 @@ const db = admin.firestore();
 const transporter = nodemailer.createTransporter({
     service: 'gmail',
     auth: {
-        user: functions.config().email?.user || 'your-email@gmail.com',
-        pass: functions.config().email?.pass || 'your-app-password'
+        user: emailUser.value(),
+        pass: emailPass.value()
     }
 });
 
@@ -315,7 +320,7 @@ async function sendWinningEmail(winner) {
     `;
     
     const mailOptions = {
-        from: functions.config().email?.user || 'noreply@lotto-app.com',
+        from: emailUser.value(),
         to: email,
         subject: subject,
         text: textContent,
