@@ -5,6 +5,8 @@ class LottoApp {
         this.selectedNumbers = [];
         this.maxSelections = 6;
         this.maxNumber = 45;
+        this.currentUser = null;
+        this.isLoginMode = true;
         
         this.init();
     }
@@ -12,6 +14,8 @@ class LottoApp {
     init() {
         this.createNumberGrid();
         this.bindEvents();
+        this.bindAuthEvents();
+        this.setupAuthStateListener();
         this.updateUI();
     }
 
@@ -156,24 +160,22 @@ class LottoApp {
         this.showMessage('임의로 6개 번호가 선택되었습니다.', 'success');
     }
 
-    // 번호 저장 (Firebase 연동 대기)
+    // 번호 저장 (인증된 사용자만 가능)
     async saveNumbers() {
         if (this.selectedNumbers.length !== this.maxSelections) {
             this.showMessage('6개 번호를 모두 선택해주세요.', 'warning');
             return;
         }
 
-        try {
-            // Firebase 설정이 완료되면 활성화
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                const docData = {
-                    numbers: this.selectedNumbers,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    date: new Date().toLocaleDateString('ko-KR')
-                };
+        // 로그인 확인
+        if (!this.currentUser) {
+            this.showLoginRequired();
+            return;
+        }
 
-                await db.collection('lotto-selections').add(docData);
+        try {
+            if (typeof FirebaseUtils !== 'undefined') {
+                await FirebaseUtils.saveNumbers(this.selectedNumbers);
                 this.showMessage('번호가 성공적으로 저장되었습니다!', 'success');
                 
                 // 저장 후 새로운 선택을 위해 초기화
@@ -182,14 +184,17 @@ class LottoApp {
                 }, 2000);
                 
             } else {
-                // Firebase 미설정 시 로컬 저장 시뮬레이션
                 console.log('선택된 번호:', this.selectedNumbers);
-                this.showMessage('Firebase 설정 후 저장 가능합니다.', 'info');
+                this.showMessage('Firebase 설정이 필요합니다.', 'info');
             }
             
         } catch (error) {
             console.error('저장 오류:', error);
-            this.showMessage('저장 중 오류가 발생했습니다.', 'error');
+            if (error.message === '로그인이 필요합니다.') {
+                this.showLoginRequired();
+            } else {
+                this.showMessage('저장 중 오류가 발생했습니다.', 'error');
+            }
         }
     }
 
@@ -255,6 +260,230 @@ class LottoApp {
     isValidSelection() {
         return this.selectedNumbers.length === this.maxSelections &&
                this.selectedNumbers.every(num => num >= 1 && num <= this.maxNumber);
+    }
+
+    // 인증 관련 이벤트 바인딩
+    bindAuthEvents() {
+        // 로그인 버튼
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            this.showLoginModal();
+        });
+
+        // 로그아웃 버튼
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.logout();
+        });
+
+        // 모달 관련
+        const modal = document.getElementById('loginModal');
+        const closeBtn = modal.querySelector('.close');
+        
+        closeBtn.addEventListener('click', () => {
+            this.hideLoginModal();
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.hideLoginModal();
+            }
+        });
+
+        // 탭 전환
+        document.getElementById('loginTab').addEventListener('click', () => {
+            this.switchAuthTab('login');
+        });
+        
+        document.getElementById('signupTab').addEventListener('click', () => {
+            this.switchAuthTab('signup');
+        });
+
+        // 폼 제출
+        document.getElementById('authForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleAuthSubmit();
+        });
+
+        // Google 로그인
+        document.getElementById('googleLoginBtn').addEventListener('click', () => {
+            this.handleGoogleLogin();
+        });
+    }
+
+    // 인증 상태 리스너 설정
+    setupAuthStateListener() {
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+            firebase.auth().onAuthStateChanged((user) => {
+                this.currentUser = user;
+                this.updateAuthUI();
+                
+                if (user) {
+                    console.log('로그인됨:', user.email);
+                } else {
+                    console.log('로그아웃됨');
+                }
+            });
+        }
+    }
+
+    // 로그인 모달 표시
+    showLoginModal() {
+        const modal = document.getElementById('loginModal');
+        modal.style.display = 'block';
+        this.switchAuthTab('login');
+    }
+
+    // 로그인 모달 숨김
+    hideLoginModal() {
+        const modal = document.getElementById('loginModal');
+        modal.style.display = 'none';
+        this.clearAuthForm();
+    }
+
+    // 인증 탭 전환
+    switchAuthTab(mode) {
+        this.isLoginMode = mode === 'login';
+        
+        const loginTab = document.getElementById('loginTab');
+        const signupTab = document.getElementById('signupTab');
+        const displayNameGroup = document.getElementById('displayNameGroup');
+        const submitBtn = document.getElementById('authSubmitBtn');
+        
+        if (this.isLoginMode) {
+            loginTab.classList.add('active');
+            signupTab.classList.remove('active');
+            displayNameGroup.style.display = 'none';
+            submitBtn.textContent = '로그인';
+            document.querySelector('.modal-content h2').textContent = '로그인';
+        } else {
+            loginTab.classList.remove('active');
+            signupTab.classList.add('active');
+            displayNameGroup.style.display = 'block';
+            submitBtn.textContent = '회원가입';
+            document.querySelector('.modal-content h2').textContent = '회원가입';
+        }
+    }
+
+    // 인증 폼 제출 처리
+    async handleAuthSubmit() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const displayName = document.getElementById('displayName').value;
+
+        if (!email || !password) {
+            this.showMessage('이메일과 비밀번호를 입력해주세요.', 'warning');
+            return;
+        }
+
+        if (!this.isLoginMode && !displayName) {
+            this.showMessage('닉네임을 입력해주세요.', 'warning');
+            return;
+        }
+
+        try {
+            if (typeof AuthUtils !== 'undefined') {
+                if (this.isLoginMode) {
+                    await AuthUtils.signInWithEmail(email, password);
+                    this.showMessage('로그인 성공!', 'success');
+                } else {
+                    await AuthUtils.signUpWithEmail(email, password, displayName);
+                    this.showMessage('회원가입 성공!', 'success');
+                }
+                this.hideLoginModal();
+            } else {
+                this.showMessage('Firebase 설정이 필요합니다.', 'error');
+            }
+        } catch (error) {
+            console.error('인증 오류:', error);
+            this.showAuthError(error);
+        }
+    }
+
+    // Google 로그인 처리
+    async handleGoogleLogin() {
+        try {
+            if (typeof AuthUtils !== 'undefined') {
+                await AuthUtils.signInWithGoogle();
+                this.showMessage('Google 로그인 성공!', 'success');
+                this.hideLoginModal();
+            } else {
+                this.showMessage('Firebase 설정이 필요합니다.', 'error');
+            }
+        } catch (error) {
+            console.error('Google 로그인 오류:', error);
+            this.showAuthError(error);
+        }
+    }
+
+    // 로그아웃
+    async logout() {
+        try {
+            if (typeof AuthUtils !== 'undefined') {
+                await AuthUtils.signOut();
+                this.showMessage('로그아웃되었습니다.', 'info');
+            }
+        } catch (error) {
+            console.error('로그아웃 오류:', error);
+            this.showMessage('로그아웃 중 오류가 발생했습니다.', 'error');
+        }
+    }
+
+    // 인증 UI 업데이트
+    updateAuthUI() {
+        const loginSection = document.getElementById('loginSection');
+        const userSection = document.getElementById('userSection');
+        const userName = document.getElementById('userName');
+
+        if (this.currentUser) {
+            loginSection.style.display = 'none';
+            userSection.style.display = 'flex';
+            userName.textContent = this.currentUser.displayName || this.currentUser.email;
+        } else {
+            loginSection.style.display = 'block';
+            userSection.style.display = 'none';
+        }
+    }
+
+    // 로그인 필요 메시지 표시
+    showLoginRequired() {
+        this.showMessage('로그인이 필요합니다. 로그인 후 다시 시도해주세요.', 'warning');
+        setTimeout(() => {
+            this.showLoginModal();
+        }, 1500);
+    }
+
+    // 인증 에러 처리
+    showAuthError(error) {
+        let message = '인증 중 오류가 발생했습니다.';
+        
+        switch (error.code) {
+            case 'auth/user-not-found':
+                message = '등록되지 않은 이메일입니다.';
+                break;
+            case 'auth/wrong-password':
+                message = '잘못된 비밀번호입니다.';
+                break;
+            case 'auth/email-already-in-use':
+                message = '이미 사용 중인 이메일입니다.';
+                break;
+            case 'auth/weak-password':
+                message = '비밀번호가 너무 약합니다. 6자 이상 입력해주세요.';
+                break;
+            case 'auth/invalid-email':
+                message = '잘못된 이메일 형식입니다.';
+                break;
+            case 'auth/popup-closed-by-user':
+                message = '로그인이 취소되었습니다.';
+                break;
+        }
+        
+        this.showMessage(message, 'error');
+    }
+
+    // 인증 폼 초기화
+    clearAuthForm() {
+        document.getElementById('email').value = '';
+        document.getElementById('password').value = '';
+        document.getElementById('displayName').value = '';
     }
 }
 

@@ -11,6 +11,15 @@
         <!-- 헤더 -->
         <header class="header">
             <h1>로또 번호 선택기</h1>
+            <div class="user-section">
+                <div id="loginSection" class="login-section">
+                    <button id="loginBtn" class="btn btn-secondary">로그인</button>
+                </div>
+                <div id="userSection" class="user-info" style="display: none;">
+                    <span id="userName"></span>
+                    <button id="logoutBtn" class="btn btn-secondary btn-small">로그아웃</button>
+                </div>
+            </div>
         </header>
 
         <!-- 메인 컨텐츠 -->
@@ -51,8 +60,47 @@
         </footer>
     </div>
 
+    <!-- 로그인 모달 -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>로그인</h2>
+            
+            <div class="auth-tabs">
+                <button id="loginTab" class="tab-btn active">로그인</button>
+                <button id="signupTab" class="tab-btn">회원가입</button>
+            </div>
+
+            <form id="authForm">
+                <div class="form-group">
+                    <label for="email">이메일</label>
+                    <input type="email" id="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">비밀번호</label>
+                    <input type="password" id="password" required>
+                </div>
+                
+                <div class="form-group" id="displayNameGroup" style="display: none;">
+                    <label for="displayName">닉네임</label>
+                    <input type="text" id="displayName">
+                </div>
+                
+                <button type="submit" id="authSubmitBtn" class="btn btn-primary auth-btn">로그인</button>
+            </form>
+
+            <div class="divider">
+                <span>또는</span>
+            </div>
+
+            <button id="googleLoginBtn" class="btn btn-google">Google로 로그인</button>
+        </div>
+    </div>
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
     <!-- 커스텀 스크립트 -->

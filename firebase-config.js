@@ -78,13 +78,19 @@ try {
         console.log('✅ Firebase 초기화 성공');
     }
     
-    // Firestore 인스턴스 생성
+    // Firebase 서비스 참조
+    const auth = firebase.auth();
     const db = firebase.firestore();
+    
+    // Google 로그인 프로바이더
+    const googleProvider = new firebase.auth.GoogleAuthProvider();
+    googleProvider.addScope('profile');
+    googleProvider.addScope('email');
     
     // 한국 시간대 설정
     const timeZone = 'Asia/Seoul';
     
-    console.log('🔥 Firebase Firestore 연결 완료');
+    console.log('🔥 Firebase Authentication & Firestore 연결 완료');
     console.log('📍 프로젝트 ID:', firebaseConfig.projectId);
     
 } catch (error) {
@@ -126,30 +132,145 @@ async function testFirebaseConnection() {
 /**
  * 데이터베이스 컬렉션 구조:
  * 
- * lotto-selections/
+ * users/
+ * ├── {uid}/
+ * │   ├── email: "user@example.com"
+ * │   ├── displayName: "사용자"
+ * │   ├── createdAt: Timestamp
+ * │   └── lastLoginAt: Timestamp
+ * 
+ * userNumbers/
  * ├── {document-id}/
- * │   ├── numbers: [1, 5, 12, 23, 34, 45]  // 선택된 번호 배열
- * │   ├── timestamp: Timestamp             // 선택 시간
- * │   ├── date: "2024/01/15"              // 선택 날짜 (한국 시간)
- * │   └── ...기타 필드
+ * │   ├── userId: "user-uid"
+ * │   ├── numbers: [1, 5, 12, 23, 34, 45]
+ * │   ├── drawNumber: 1050  // 추첨 회차
+ * │   ├── createdAt: Timestamp
+ * │   └── date: "2024/01/15"
  */
 
-// 유틸리티 함수들
+// 인증 관련 유틸리티 함수들
+const AuthUtils = {
+    /**
+     * 이메일 회원가입
+     */
+    async signUpWithEmail(email, password, displayName) {
+        try {
+            const credential = await auth.createUserWithEmailAndPassword(email, password);
+            
+            // 사용자 프로필 업데이트
+            await credential.user.updateProfile({
+                displayName: displayName
+            });
+            
+            // Firestore에 사용자 정보 저장
+            await db.collection('users').doc(credential.user.uid).set({
+                email: email,
+                displayName: displayName,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            console.log('✅ 회원가입 성공:', credential.user.uid);
+            return credential.user;
+            
+        } catch (error) {
+            console.error('❌ 회원가입 실패:', error);
+            throw error;
+        }
+    },
+    
+    /**
+     * 이메일 로그인
+     */
+    async signInWithEmail(email, password) {
+        try {
+            const credential = await auth.signInWithEmailAndPassword(email, password);
+            
+            // 마지막 로그인 시간 업데이트
+            await db.collection('users').doc(credential.user.uid).update({
+                lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            console.log('✅ 로그인 성공:', credential.user.uid);
+            return credential.user;
+            
+        } catch (error) {
+            console.error('❌ 로그인 실패:', error);
+            throw error;
+        }
+    },
+    
+    /**
+     * Google 로그인
+     */
+    async signInWithGoogle() {
+        try {
+            const result = await auth.signInWithPopup(googleProvider);
+            const user = result.user;
+            
+            // 첫 로그인인지 확인
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            
+            if (!userDoc.exists) {
+                // 새 사용자인 경우 Firestore에 정보 저장
+                await db.collection('users').doc(user.uid).set({
+                    email: user.email,
+                    displayName: user.displayName,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                // 기존 사용자인 경우 마지막 로그인 시간 업데이트
+                await db.collection('users').doc(user.uid).update({
+                    lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+            
+            console.log('✅ Google 로그인 성공:', user.uid);
+            return user;
+            
+        } catch (error) {
+            console.error('❌ Google 로그인 실패:', error);
+            throw error;
+        }
+    },
+    
+    /**
+     * 로그아웃
+     */
+    async signOut() {
+        try {
+            await auth.signOut();
+            console.log('✅ 로그아웃 성공');
+        } catch (error) {
+            console.error('❌ 로그아웃 실패:', error);
+            throw error;
+        }
+    }
+};
+
+// Firebase 유틸리티 함수들
 const FirebaseUtils = {
     /**
-     * 번호 저장
+     * 번호 저장 (인증된 사용자용)
      */
-    async saveNumbers(numbers) {
+    async saveNumbers(numbers, userId = null) {
         try {
-            const db = firebase.firestore();
+            const currentUser = userId || (auth.currentUser ? auth.currentUser.uid : null);
+            
+            if (!currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+            
             const docData = {
+                userId: currentUser,
                 numbers: numbers,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                date: new Date().toLocaleDateString('ko-KR'),
-                userAgent: navigator.userAgent
+                drawNumber: await this.getCurrentDrawNumber(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                date: new Date().toLocaleDateString('ko-KR')
             };
             
-            const docRef = await db.collection('lotto-selections').add(docData);
+            const docRef = await db.collection('userNumbers').add(docData);
             console.log('📝 번호 저장 완료, 문서 ID:', docRef.id);
             return docRef.id;
             
@@ -160,13 +281,32 @@ const FirebaseUtils = {
     },
     
     /**
-     * 저장된 번호 조회
+     * 현재 추첨 회차 가져오기 (간단한 계산)
      */
-    async getRecentSelections(limit = 10) {
+    async getCurrentDrawNumber() {
+        // 로또 1회차: 2002년 12월 7일
+        const firstDraw = new Date('2002-12-07');
+        const today = new Date();
+        const diffTime = Math.abs(today - firstDraw);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffWeeks = Math.floor(diffDays / 7);
+        return diffWeeks + 1;
+    },
+    
+    /**
+     * 사용자별 저장된 번호 조회
+     */
+    async getUserNumbers(userId = null, limit = 10) {
         try {
-            const db = firebase.firestore();
-            const snapshot = await db.collection('lotto-selections')
-                .orderBy('timestamp', 'desc')
+            const currentUser = userId || (auth.currentUser ? auth.currentUser.uid : null);
+            
+            if (!currentUser) {
+                throw new Error('로그인이 필요합니다.');
+            }
+            
+            const snapshot = await db.collection('userNumbers')
+                .where('userId', '==', currentUser)
+                .orderBy('createdAt', 'desc')
                 .limit(limit)
                 .get();
             
@@ -178,7 +318,7 @@ const FirebaseUtils = {
                 });
             });
             
-            console.log(`📋 ${selections.length}개 선택 기록 조회 완료`);
+            console.log(`📋 ${selections.length}개 개인 선택 기록 조회 완료`);
             return selections;
             
         } catch (error) {
