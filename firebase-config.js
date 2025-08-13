@@ -90,6 +90,19 @@ try {
     googleProvider.addScope('profile');
     googleProvider.addScope('email');
     
+    // Google 로그인 redirect 결과 처리
+    auth.getRedirectResult().then((result) => {
+        if (result.user) {
+            console.log('✅ Google 로그인 성공 (redirect):', result.user.uid);
+            // 사용자 정보를 Firestore에 저장하는 로직
+            handleRedirectUser(result.user);
+        }
+    }).catch((error) => {
+        if (error.code !== 'auth/popup-closed-by-user') {
+            console.error('❌ Google 로그인 redirect 실패:', error);
+        }
+    });
+    
     // 한국 시간대 설정
     const timeZone = 'Asia/Seoul';
     
@@ -99,6 +112,30 @@ try {
 } catch (error) {
     console.error('❌ Firebase 초기화 실패:', error);
     console.log('🔧 Firebase 설정을 확인해주세요.');
+}
+
+// redirect 로그인 결과 처리 헬퍼 함수
+async function handleRedirectUser(user) {
+    try {
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        
+        if (!userDoc.exists) {
+            // 새 사용자인 경우 Firestore에 정보 저장
+            await db.collection('users').doc(user.uid).set({
+                email: user.email,
+                displayName: user.displayName,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            // 기존 사용자인 경우 마지막 로그인 시간 업데이트
+            await db.collection('users').doc(user.uid).update({
+                lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    } catch (error) {
+        console.error('❌ redirect 사용자 처리 실패:', error);
+    }
 }
 
 /**
@@ -216,6 +253,12 @@ const AuthUtils = {
      */
     async signInWithGoogle() {
         try {
+            // popup 방식이 작동하지 않는 환경에서는 redirect 방식 사용
+            if (window.location.protocol === 'file:') {
+                await auth.signInWithRedirect(googleProvider);
+                return; // redirect 후에는 페이지가 새로고침되므로 return
+            }
+            
             const result = await auth.signInWithPopup(googleProvider);
             const user = result.user;
             

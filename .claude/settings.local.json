@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npm init:*)",
       "Bash(firebase init:*)",
-      "Bash(firebase use:*)"
+      "Bash(firebase use:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
