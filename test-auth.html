@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Auth Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        button { margin: 5px; padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h1>Firebase Authentication Test</h1>
+    
+    <div id="results"></div>
+    
+    <button onclick="testFirebaseInit()">Test Firebase Init</button>
+    <button onclick="testAuthAvailable()">Test Auth Available</button>
+    <button onclick="testGoogleProviderAvailable()">Test Google Provider</button>
+    <button onclick="testFirestoreConnection()">Test Firestore Connection</button>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    
+    <script>
+        function addResult(message, isSuccess = true) {
+            const div = document.createElement('div');
+            div.className = `test-result ${isSuccess ? 'success' : 'error'}`;
+            div.textContent = message;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function testFirebaseInit() {
+            try {
+                if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+                    addResult('✅ Firebase는 정상적으로 초기화되었습니다.');
+                } else {
+                    addResult('❌ Firebase가 초기화되지 않았습니다.', false);
+                }
+            } catch (error) {
+                addResult(`❌ Firebase 초기화 테스트 실패: ${error.message}`, false);
+            }
+        }
+
+        function testAuthAvailable() {
+            try {
+                if (typeof auth !== 'undefined' && auth !== null) {
+                    addResult('✅ Firebase Auth가 사용 가능합니다.');
+                } else {
+                    addResult('❌ Firebase Auth를 사용할 수 없습니다.', false);
+                }
+            } catch (error) {
+                addResult(`❌ Auth 테스트 실패: ${error.message}`, false);
+            }
+        }
+
+        function testGoogleProviderAvailable() {
+            try {
+                if (typeof googleProvider !== 'undefined' && googleProvider !== null) {
+                    addResult('✅ Google Provider가 사용 가능합니다.');
+                } else {
+                    addResult('❌ Google Provider를 사용할 수 없습니다.', false);
+                }
+            } catch (error) {
+                addResult(`❌ Google Provider 테스트 실패: ${error.message}`, false);
+            }
+        }
+
+        async function testFirestoreConnection() {
+            try {
+                if (typeof db !== 'undefined' && db !== null) {
+                    addResult('✅ Firestore DB 객체가 사용 가능합니다.');
+                    
+                    // 간단한 읽기 테스트 (실제 데이터 접근하지 않음)
+                    const testCollection = db.collection('test');
+                    if (testCollection) {
+                        addResult('✅ Firestore 컬렉션 참조가 가능합니다.');
+                    }
+                } else {
+                    addResult('❌ Firestore DB를 사용할 수 없습니다.', false);
+                }
+            } catch (error) {
+                addResult(`❌ Firestore 연결 테스트 실패: ${error.message}`, false);
+            }
+        }
+
+        // 페이지 로드 시 자동 테스트
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testFirebaseInit();
+                testAuthAvailable();
+                testGoogleProviderAvailable();
+                testFirestoreConnection();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

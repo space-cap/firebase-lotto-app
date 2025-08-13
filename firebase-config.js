@@ -70,6 +70,9 @@ const firebaseConfig = {
     */
 };
 
+// Firebase 서비스 참조 (전역 변수로 선언)
+let auth, db, googleProvider;
+
 // Firebase 초기화
 try {
     // Firebase 앱 초기화
@@ -79,11 +82,11 @@ try {
     }
     
     // Firebase 서비스 참조
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    auth = firebase.auth();
+    db = firebase.firestore();
     
     // Google 로그인 프로바이더
-    const googleProvider = new firebase.auth.GoogleAuthProvider();
+    googleProvider = new firebase.auth.GoogleAuthProvider();
     googleProvider.addScope('profile');
     googleProvider.addScope('email');
     

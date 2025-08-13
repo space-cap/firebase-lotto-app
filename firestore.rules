@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Test collection - allow read/write for testing
+    match /test/{document} {
+      allow read, write: if true;
+    }
+    
+    // 로또 선택 데이터 - 인증된 사용자만 본인 데이터 접근 가능
+    match /userNumbers/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // 사용자 프로필 - 인증된 사용자만 본인 데이터 접근 가능
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 당첨 번호 - 모든 사용자가 읽기 가능
+    match /winningNumbers/{document} {
+      allow read: if true;
+      allow write: if request.auth != null; // 관리자만 쓰기 가능 (추가 로직 필요)
+    }
+    
+    // 사용자 당첨 결과 - 인증된 사용자만 본인 데이터 접근 가능
+    match /userResults/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+  }
+}
