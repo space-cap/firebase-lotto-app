@@ -420,8 +420,18 @@ const FirebaseUtils = {
                 throw new Error('로그인이 필요합니다.');
             }
 
-            // 관리자 권한 확인 (간단한 예시, 실제로는 더 정교한 권한 확인 필요)
-            if (auth.currentUser.email !== 'admin@example.com') {
+            // 관리자 권한 확인 - 현재 로그인한 사용자 정보 출력
+            console.log('🔍 현재 로그인한 사용자:', auth.currentUser.email);
+            
+            // 관리자 이메일 목록 (실제 환경에서는 Firestore에서 관리하는 것을 권장)
+            const adminEmails = [
+                'admin@example.com',
+                'lotto.admin@gmail.com',
+                'admin@lotto.com',
+                'mobilenjoy@gmail.com'
+            ];
+            
+            if (!adminEmails.includes(auth.currentUser.email)) {
                 throw new Error('관리자만 당첨 번호를 등록할 수 있습니다.');
             }
 
