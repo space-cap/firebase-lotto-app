@@ -82,7 +82,7 @@ class AdminApp {
     checkAdminStatus() {
         if (this.currentUser) {
             // 간단한 관리자 확인 (실제 환경에서는 더 정교한 권한 시스템 필요)
-            this.isAdmin = this.currentUser.email === 'admin@example.com' || 
+            this.isAdmin = this.currentUser.email === 'mobilenjoy@gmail.com' || 
                           this.currentUser.email?.includes('admin');
         } else {
             this.isAdmin = false;

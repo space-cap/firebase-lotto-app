@@ -6,7 +6,8 @@
       "Bash(firebase use:*)",
       "Bash(firebase projects:list:*)",
       "Bash(firebase deploy:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(firebase auth:export:*)"
     ],
     "deny": [],
     "ask": []
